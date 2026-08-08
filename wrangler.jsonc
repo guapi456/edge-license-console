@@ -1,0 +1,55 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "edge-license-console",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "routes": [
+    {
+      "pattern": "license.145156.xyz",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "ratelimits": [
+    {
+      "name": "PUBLIC_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 }
+    },
+    {
+      "name": "ADMIN_LOGIN_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 }
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "edge-license-console",
+      "database_id": "6521371d-e22e-4b7c-af12-a189257f15b2",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LICENSE_COORDINATOR",
+        "class_name": "LicenseCoordinator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["LicenseCoordinator"]
+    }
+  ],
+  "triggers": {
+    "crons": ["17 * * * *"]
+  }
+}

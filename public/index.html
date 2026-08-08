@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>许可控制台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <section id="login-view" class="login-shell" aria-labelledby="login-title">
+    <form id="login-form" class="login-panel">
+      <div class="brand-mark" aria-hidden="true">EL</div>
+      <p class="eyebrow">EDGE LICENSE</p>
+      <h1 id="login-title">管理控制台</h1>
+      <p class="muted">使用管理员账号登录，登录状态仅保存在当前浏览器会话中。</p>
+      <label for="username-input">账号</label>
+      <input id="username-input" name="username" type="text" autocomplete="username" required autofocus placeholder="输入管理员账号">
+      <label for="password-input">密码</label>
+      <input id="password-input" name="password" type="password" autocomplete="current-password" required placeholder="输入管理员密码">
+      <p id="login-error" class="field-error" role="alert" hidden></p>
+      <button class="button primary full" type="submit">进入控制台</button>
+    </form>
+  </section>
+
+  <div id="app-view" class="app-shell" hidden>
+    <header class="topbar">
+      <a class="brand" href="#overview" aria-label="许可控制台首页">
+        <span class="brand-mark small" aria-hidden="true">EL</span>
+        <span><strong>许可控制台</strong><small>Workers Admin</small></span>
+      </a>
+      <nav class="topnav" aria-label="主导航">
+        <a href="#overview" data-route="overview">概览</a>
+        <a href="#projects" data-route="projects">项目</a>
+        <a href="#plans" data-route="plans">套餐</a>
+        <a href="#licenses" data-route="licenses">授权码</a>
+        <a href="#audit" data-route="audit">审计</a>
+      </nav>
+      <div class="top-actions">
+        <button id="refresh-button" class="icon-button" type="button" title="刷新当前页面" aria-label="刷新当前页面">&#8635;</button>
+        <button id="logout-button" class="button quiet" type="button">退出</button>
+      </div>
+    </header>
+
+    <main id="main-content" tabindex="-1">
+      <section id="overview-section" class="page" data-page="overview">
+        <div class="page-header">
+          <div><p class="eyebrow">系统状态</p><h1>概览</h1></div>
+          <button class="button primary" type="button" data-open="bulk-modal">批量生成授权码</button>
+        </div>
+        <div id="stats-grid" class="stats-grid" aria-busy="true"></div>
+        <div class="split-grid">
+          <section class="panel">
+            <div class="panel-header"><div><h2>最近项目</h2><p>当前项目与启用状态</p></div><a href="#projects">查看全部</a></div>
+            <div id="overview-projects" class="data-region"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-header"><div><h2>最近审计</h2><p>管理操作与调用结果</p></div><a href="#audit">查看全部</a></div>
+            <div id="overview-audit" class="data-region"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="projects-section" class="page" data-page="projects" hidden>
+        <div class="page-header">
+          <div><p class="eyebrow">隔离业务</p><h1>项目</h1><p>按产品或环境划分授权与套餐。</p></div>
+          <button class="button primary" type="button" data-open="project-modal">新建项目</button>
+        </div>
+        <section class="panel table-panel">
+          <div id="projects-table" class="data-region"></div>
+        </section>
+      </section>
+
+      <section id="plans-section" class="page" data-page="plans" hidden>
+        <div class="page-header">
+          <div><p class="eyebrow">授权策略</p><h1>套餐</h1><p>配置有效期与默认设备上限。</p></div>
+          <button class="button primary" type="button" data-open="plan-modal">新建套餐</button>
+        </div>
+        <section class="panel table-panel">
+          <div id="plans-table" class="data-region"></div>
+        </section>
+      </section>
+
+      <section id="licenses-section" class="page" data-page="licenses" hidden>
+        <div class="page-header">
+          <div><p class="eyebrow">生命周期</p><h1>授权码</h1><p>查询、停用和解绑设备。</p></div>
+          <div class="page-header-actions"><button id="copy-visible-keys" class="button secondary" type="button" disabled>复制本页</button><button class="button primary" type="button" data-open="bulk-modal">批量生成</button></div>
+        </div>
+        <form id="license-filters" class="filterbar" role="search">
+          <label><span>项目</span><select id="filter-project" name="project_id"><option value="">全部项目</option></select></label>
+          <label><span>状态</span><select id="filter-status" name="status"><option value="">全部状态</option><option value="enabled">有效</option><option value="disabled">已停用</option><option value="expired">已过期</option><option value="unused">未激活</option></select></label>
+          <label class="grow"><span>搜索</span><input id="filter-query" name="q" type="search" placeholder="授权码、备注或设备标识"></label>
+          <button class="button secondary" type="submit">筛选</button>
+          <button id="clear-filters" class="button quiet" type="button">清除</button>
+        </form>
+        <section class="panel table-panel">
+          <div id="licenses-table" class="data-region"></div>
+          <div id="license-pagination" class="pagination" hidden>
+            <p id="pagination-summary"></p>
+            <div><button id="prev-page" class="button quiet" type="button">上一页</button><span id="page-number"></span><button id="next-page" class="button quiet" type="button">下一页</button></div>
+          </div>
+        </section>
+      </section>
+
+      <section id="audit-section" class="page" data-page="audit" hidden>
+        <div class="page-header"><div><p class="eyebrow">操作留痕</p><h1>审计日志</h1><p>追踪管理动作、对象与来源。</p></div></div>
+        <section class="panel table-panel"><div id="audit-table" class="data-region"></div></section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="project-modal" class="modal">
+    <form id="project-form" method="dialog">
+      <header><div><p class="eyebrow">NEW PROJECT</p><h2>新建项目</h2></div><button class="icon-button" type="button" data-close aria-label="关闭">&times;</button></header>
+      <div class="form-body">
+        <label>项目名称<input name="name" required maxlength="80" placeholder="例如：桌面客户端"></label>
+        <label>项目标识<input name="slug" required maxlength="60" pattern="[a-z0-9][a-z0-9-]*" placeholder="desktop-client"><small>小写字母、数字与连字符</small></label>
+        <label>说明<textarea name="description" rows="3" maxlength="240" placeholder="内部用途说明（可选）"></textarea></label>
+        <label class="check-row"><input name="require_device_signature" type="checkbox" checked><span><strong>启用设备签名</strong><small>客户端使用 Ed25519 安装密钥证明设备身份，建议保持开启。</small></span></label>
+      </div>
+      <footer><button class="button quiet" type="button" data-close>取消</button><button class="button primary" type="submit" value="default">创建项目</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="plan-modal" class="modal">
+    <form id="plan-form" method="dialog">
+      <header><div><p class="eyebrow">NEW PLAN</p><h2>新建套餐</h2></div><button class="icon-button" type="button" data-close aria-label="关闭">&times;</button></header>
+      <div class="form-body two-cols">
+        <label class="span-2">所属项目<select name="project_id" required data-project-select><option value="">选择项目</option></select></label>
+        <label class="span-2">套餐名称<input name="name" required maxlength="80" placeholder="例如：月度标准版"></label>
+        <label>周期<select id="plan-kind" name="kind" required><option value="daily">日卡</option><option value="weekly">周卡</option><option value="monthly">月卡（30 天）</option><option value="quarterly">季卡（90 天）</option><option value="annual">年卡（365 天）</option><option value="custom">自定义</option></select></label>
+        <label>有效天数<input id="duration-days" name="duration_days" type="number" min="1" max="3650" value="1" required></label>
+        <label class="span-2">默认设备上限<input name="max_devices" type="number" min="1" max="100" value="1" required></label>
+      </div>
+      <footer><button class="button quiet" type="button" data-close>取消</button><button class="button primary" type="submit" value="default">创建套餐</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="bulk-modal" class="modal">
+    <form id="bulk-form" method="dialog">
+      <header><div><p class="eyebrow">BULK ISSUE</p><h2>批量生成授权码</h2></div><button class="icon-button" type="button" data-close aria-label="关闭">&times;</button></header>
+      <div class="form-body two-cols">
+        <label class="span-2">项目<select id="bulk-project" name="project_id" required data-project-select><option value="">选择项目</option></select></label>
+        <label class="span-2">套餐<select id="bulk-plan" name="plan_id" required><option value="">先选择项目</option></select></label>
+        <label>生成数量<input name="count" type="number" min="1" max="100" value="10" required></label>
+        <label>设备上限<input name="max_devices" type="number" min="1" max="100" value="1" required></label>
+      </div>
+      <footer><button class="button quiet" type="button" data-close>取消</button><button class="button primary" type="submit" value="default">生成授权码</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="keys-modal" class="modal wide">
+    <div class="dialog-layout">
+      <header><div><p class="eyebrow">GENERATED KEYS</p><h2>授权码已生成</h2></div><button id="close-keys" class="icon-button" type="button" aria-label="关闭">&times;</button></header>
+      <div class="notice warning"><strong>已加密保存</strong><span>可立即复制或下载，也可稍后在授权码列表中再次查看和复制。</span></div>
+      <div class="key-actions"><span id="keys-count"></span><div><button id="copy-keys" class="button secondary" type="button">复制全部</button><button id="download-keys" class="button primary" type="button">下载 CSV</button></div></div>
+      <textarea id="keys-output" class="keys-output" readonly aria-label="生成的授权码"></textarea>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-modal" class="modal compact">
+    <form id="confirm-form" method="dialog">
+      <header><h2 id="confirm-title">确认操作</h2></header>
+      <div class="form-body"><p id="confirm-message"></p></div>
+      <footer><button class="button quiet" type="button" data-close>取消</button><button id="confirm-submit" class="button danger" type="submit" value="default">确认</button></footer>
+    </form>
+  </dialog>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

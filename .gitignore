@@ -1,0 +1,14 @@
+node_modules/
+.wrangler/
+.dev.vars
+workerd-build/
+*.log
+verification-runtime/
+coverage/
+dist/
+.env
+.env.*
+!.env.example
+*.tmp
+*.bak
+.DS_Store

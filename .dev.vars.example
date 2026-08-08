@@ -1,0 +1,8 @@
+ADMIN_API_TOKEN=replace-with-at-least-32-random-bytes
+ADMIN_USERNAME=replace-with-admin-username
+ADMIN_PASSWORD_HASH=replace-with-pbkdf2-sha256-base64url-hash
+ADMIN_PASSWORD_SALT=replace-with-random-base64url-salt
+ADMIN_SESSION_SECRET=replace-with-at-least-32-random-bytes
+KEY_PEPPER=replace-with-an-independent-32-byte-secret
+LICENSE_KEY_ENCRYPTION_SECRET=replace-with-a-base64url-encoded-32-byte-secret
+TRUSTED_ORIGINS=http://127.0.0.1:8787
