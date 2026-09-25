@@ -105,6 +105,7 @@ Authorization: Bearer <ADMIN_API_TOKEN>
 |---|---|
 | `GET /api/admin/stats` | 项目、卡密和设备统计 |
 | `GET/POST /api/admin/projects` | 项目列表与创建 |
+| `PATCH /api/admin/projects/:id` | 更新项目状态与 `require_device_signature` 设备签名开关 |
 | `DELETE /api/admin/projects/:id` | 永久删除项目及其套餐、卡密、设备和会话 |
 | `GET/POST /api/admin/plans` | 套餐列表与创建 |
 | `POST /api/admin/licenses/batch` | 批量生成卡密 |

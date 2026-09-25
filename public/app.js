@@ -193,8 +193,11 @@
   }
 
   function renderProjects() {
-    const rows = state.projects.map((project) => `<tr><td><strong>${escapeHtml(project.name)}</strong><span class="muted truncate">${escapeHtml(project.description || project.slug || "-")}</span></td><td><div class="uuid-cell"><code class="mono">${escapeHtml(project.id)}</code><button class="button quiet small" data-action="copy-project-id" data-id="${escapeHtml(project.id)}" type="button">复制 UUID</button></div></td><td class="mono">${escapeHtml(project.slug || "-")}</td><td>${formatNumber(project.license_count)}</td><td><span class="status ${escapeHtml(project.status || (project.enabled === false ? "disabled" : "active"))}">${statusLabel(project.status || (project.enabled === false ? "disabled" : "active"))}</span></td><td>${formatDate(project.created_at)}</td><td><div class="actions project-actions"><button class="button danger small" data-action="delete-project" data-id="${escapeHtml(project.id)}" type="button">删除</button></div></td></tr>`).join("");
-    $("#projects-table").innerHTML = rows ? `<div class="table-wrap"><table><thead><tr><th>项目</th><th>项目 UUID</th><th>Slug</th><th>卡密数量</th><th>状态</th><th>创建时间</th><th class="actions">操作</th></tr></thead><tbody>${rows}</tbody></table></div>` : stateView("empty", "还没有项目", "新建项目后可配置套餐并生成授权码。");
+    const rows = state.projects.map((project) => {
+      const signatureRequired = project.require_device_signature === true || Number(project.require_device_signature) === 1;
+      return `<tr><td><strong>${escapeHtml(project.name)}</strong><span class="muted truncate">${escapeHtml(project.description || project.slug || "-")}</span></td><td><div class="uuid-cell"><code class="mono">${escapeHtml(project.id)}</code><button class="button quiet small" data-action="copy-project-id" data-id="${escapeHtml(project.id)}" type="button">复制 UUID</button></div></td><td class="mono">${escapeHtml(project.slug || "-")}</td><td>${formatNumber(project.license_count)}</td><td><label class="switch-control"><input type="checkbox" data-action="toggle-signature" data-id="${escapeHtml(project.id)}" ${signatureRequired ? "checked" : ""} aria-label="${signatureRequired ? "关闭" : "开启"}${escapeHtml(project.name)}的设备签名"><span aria-hidden="true"></span><strong>${signatureRequired ? "已开启" : "已关闭"}</strong></label></td><td><span class="status ${escapeHtml(project.status || (project.enabled === false ? "disabled" : "active"))}">${statusLabel(project.status || (project.enabled === false ? "disabled" : "active"))}</span></td><td>${formatDate(project.created_at)}</td><td><div class="actions project-actions"><button class="button danger small" data-action="delete-project" data-id="${escapeHtml(project.id)}" type="button">删除</button></div></td></tr>`;
+    }).join("");
+    $("#projects-table").innerHTML = rows ? `<div class="table-wrap"><table><thead><tr><th>项目</th><th>项目 UUID</th><th>Slug</th><th>卡密数量</th><th>设备签名</th><th>状态</th><th>创建时间</th><th class="actions">操作</th></tr></thead><tbody>${rows}</tbody></table></div>` : stateView("empty", "还没有项目", "新建项目后可配置套餐并生成授权码。");
     const recent = state.projects.slice(0, 5).map((project) => `<tr><td><strong>${escapeHtml(project.name)}</strong></td><td><span class="status ${escapeHtml(project.status || "active")}">${statusLabel(project.status || "active")}</span></td><td class="mono">${escapeHtml(project.slug || project.id)}</td></tr>`).join("");
     $("#overview-projects").innerHTML = recent ? `<div class="table-wrap"><table><thead><tr><th>项目</th><th>状态</th><th>标识</th></tr></thead><tbody>${recent}</tbody></table></div>` : stateView("empty", "还没有项目");
   }
@@ -468,6 +471,32 @@
         });
       }
     });
+    $("#projects-table").addEventListener("change", (event) => {
+      const input = event.target.closest('input[data-action="toggle-signature"]');
+      if (!input) return;
+      const id = input.dataset.id;
+      const project = state.projects.find((item) => String(item.id) === id);
+      if (!project) return;
+      const currentlyRequired = project.require_device_signature === true || Number(project.require_device_signature) === 1;
+      const nextRequired = input.checked;
+      input.checked = currentlyRequired;
+      if (nextRequired === currentlyRequired) return;
+      showConfirm({
+        title: `${nextRequired ? "开启" : "关闭"}设备签名`,
+        message: nextRequired
+          ? `开启后，“${project.name}”的客户端必须提交 Ed25519 公钥和签名；未保存公钥的现有设备将无法继续验证。`
+          : `关闭后，“${project.name}”的客户端可不提交 Ed25519 公钥和签名，设备防冒用能力会降低。`,
+        label: `确认${nextRequired ? "开启" : "关闭"}`,
+        danger: !nextRequired,
+        action: async () => {
+          await api(`/api/admin/projects/${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ require_device_signature: nextRequired }),
+          });
+          return { refresh: "projects", message: `设备签名已${nextRequired ? "开启" : "关闭"}` };
+        },
+      });
+    });
 
     $("#plan-kind").addEventListener("change", (event) => {
       const days = { daily: 1, weekly: 7, monthly: 30, quarterly: 90, annual: 365 }[event.target.value];
@@ -601,7 +630,7 @@
         if (result?.refresh === "projects") {
           state.loaded.clear();
           await loadProjects();
-          toast("项目已删除");
+          toast(result?.message || "项目已删除");
         } else {
           state.loaded.delete("overview");
           await loadLicenses();
