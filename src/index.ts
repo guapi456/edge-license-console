@@ -226,6 +226,45 @@ async function patchProject(request: Request, env: Env, requestId: string, proje
   return json({ id: projectId, name, slug, description, status, require_device_signature: required === 1 });
 }
 
+async function deleteProject(env: Env, requestId: string, projectId: string): Promise<Response> {
+  const current = await env.DB.prepare(
+    `SELECT p.id, p.name, p.slug,
+       (SELECT COUNT(*) FROM plans WHERE project_id = p.id) AS plan_count,
+       (SELECT COUNT(*) FROM licenses WHERE project_id = p.id) AS license_count
+     FROM projects p WHERE p.id = ?`,
+  ).bind(projectId).first<{ id: string; name: string; slug: string; plan_count: number; license_count: number }>();
+  if (!current) return json({ error: "not_found" }, 404);
+
+  const now = Math.floor(Date.now() / 1000);
+  const details = JSON.stringify({
+    deleted_project_id: current.id,
+    name: current.name,
+    slug: current.slug,
+    plan_count: Number(current.plan_count),
+    license_count: Number(current.license_count),
+  });
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM sessions WHERE license_id IN (SELECT id FROM licenses WHERE project_id = ?)").bind(projectId),
+    env.DB.prepare("DELETE FROM challenges WHERE project_id = ?").bind(projectId),
+    env.DB.prepare("DELETE FROM activations WHERE license_id IN (SELECT id FROM licenses WHERE project_id = ?)").bind(projectId),
+    env.DB.prepare("DELETE FROM license_devices WHERE license_id IN (SELECT id FROM licenses WHERE project_id = ?)").bind(projectId),
+    env.DB.prepare("DELETE FROM licenses WHERE project_id = ?").bind(projectId),
+    env.DB.prepare("DELETE FROM plans WHERE project_id = ?").bind(projectId),
+    env.DB.prepare("DELETE FROM audit_events WHERE project_id = ?").bind(projectId),
+    env.DB.prepare("DELETE FROM projects WHERE id = ?").bind(projectId),
+    env.DB.prepare(
+      "INSERT INTO audit_events (id, project_id, license_id, event_type, actor, request_id, details, created_at) VALUES (?, NULL, NULL, 'project.deleted', 'admin', ?, ?, ?)",
+    ).bind(crypto.randomUUID(), requestId, details, now),
+  ]);
+  return json({
+    ok: true,
+    id: current.id,
+    name: current.name,
+    deleted_plans: Number(current.plan_count),
+    deleted_licenses: Number(current.license_count),
+  });
+}
+
 async function createPlan(request: Request, env: Env, requestId: string): Promise<Response> {
   const body = await readJson(request);
   const projectId = readString(body, "project_id", { max: 128 })!;
@@ -409,6 +448,48 @@ async function listDevices(env: Env, licenseId: string): Promise<Response> {
   return json({ items: result.results });
 }
 
+function readLicenseIds(body: Record<string, unknown>): string[] {
+  if (!Array.isArray(body.ids) || body.ids.length < 1 || body.ids.length > 100) throw new Error("invalid_ids");
+  const ids = body.ids.map((value) => {
+    if (typeof value !== "string" || value.length < 1 || value.length > 128) throw new Error("invalid_ids");
+    return value;
+  });
+  if (new Set(ids).size !== ids.length) throw new Error("invalid_ids");
+  return ids;
+}
+
+async function deleteLicenses(env: Env, requestId: string, licenseIds: string[]): Promise<Response> {
+  const placeholders = licenseIds.map(() => "?").join(",");
+  const current = await env.DB.prepare(
+    `SELECT id, project_id, display_hint FROM licenses WHERE id IN (${placeholders})`,
+  ).bind(...licenseIds).all<{ id: string; project_id: string; display_hint: string }>();
+  if (current.results.length !== licenseIds.length) {
+    const found = new Set(current.results.map((item) => item.id));
+    return json({ error: "not_found", missing_ids: licenseIds.filter((id) => !found.has(id)) }, 404);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const details = JSON.stringify({
+    count: current.results.length,
+    licenses: current.results.map((item) => ({ id: item.id, project_id: item.project_id, display_hint: item.display_hint })),
+  });
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM sessions WHERE license_id IN (${placeholders})`).bind(...licenseIds),
+    env.DB.prepare(`DELETE FROM challenges WHERE license_id IN (${placeholders})`).bind(...licenseIds),
+    env.DB.prepare(`DELETE FROM activations WHERE license_id IN (${placeholders})`).bind(...licenseIds),
+    env.DB.prepare(`DELETE FROM license_devices WHERE license_id IN (${placeholders})`).bind(...licenseIds),
+    env.DB.prepare(`DELETE FROM licenses WHERE id IN (${placeholders})`).bind(...licenseIds),
+    env.DB.prepare(
+      "INSERT INTO audit_events (id, project_id, license_id, event_type, actor, request_id, details, created_at) VALUES (?, NULL, NULL, 'licenses.deleted', 'admin', ?, ?, ?)",
+    ).bind(crypto.randomUUID(), requestId, details, now),
+  ]);
+  return json({ ok: true, deleted: current.results.length, ids: licenseIds });
+}
+
+async function batchDeleteLicenses(request: Request, env: Env, requestId: string): Promise<Response> {
+  return deleteLicenses(env, requestId, readLicenseIds(await readJson(request)));
+}
+
 async function setLicenseStatus(env: Env, requestId: string, licenseId: string, status: "enabled" | "disabled"): Promise<Response> {
   const now = Math.floor(Date.now() / 1000);
   const current = await env.DB.prepare("SELECT project_id FROM licenses WHERE id = ?").bind(licenseId).first<{ project_id: string }>();
@@ -503,14 +584,17 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/admin/projects" && request.method === "GET") return listProjects(env);
   const projectMatch = path.match(/^\/api\/admin\/projects\/([^/]+)$/);
   if (projectMatch && request.method === "PATCH") return patchProject(request, env, requestId, projectMatch[1]!);
+  if (projectMatch && request.method === "DELETE") return deleteProject(env, requestId, projectMatch[1]!);
   if (path === "/api/admin/plans" && request.method === "POST") return createPlan(request, env, requestId);
   if (path === "/api/admin/plans" && request.method === "GET") return listPlans(url, env);
   const planMatch = path.match(/^\/api\/admin\/plans\/([^/]+)$/);
   if (planMatch && request.method === "PATCH") return patchPlan(request, env, requestId, planMatch[1]!);
   if (path === "/api/admin/licenses/batch" && request.method === "POST") return batchLicenses(request, env, requestId);
+  if (path === "/api/admin/licenses/delete-batch" && request.method === "POST") return batchDeleteLicenses(request, env, requestId);
   if (path === "/api/admin/licenses" && request.method === "GET") return listLicenses(url, env);
   const licenseMatch = path.match(/^\/api\/admin\/licenses\/([^/]+)$/);
   if (licenseMatch && request.method === "PATCH") return patchLicense(request, env, requestId, licenseMatch[1]!);
+  if (licenseMatch && request.method === "DELETE") return deleteLicenses(env, requestId, [licenseMatch[1]!]);
   const licenseAction = path.match(/^\/api\/admin\/licenses\/([^/]+)\/(enable|disable|reset-devices)$/);
   if (licenseAction && request.method === "POST") {
     if (licenseAction[2] === "reset-devices") return resetDevices(env, requestId, licenseAction[1]!);
@@ -532,7 +616,7 @@ function corsHeaders(request: Request, env: Env): Headers {
     headers.set("access-control-allow-origin", origin);
     headers.set("vary", "Origin");
     headers.set("access-control-allow-headers", "Authorization, Content-Type");
-    headers.set("access-control-allow-methods", "GET, POST, PATCH, OPTIONS");
+    headers.set("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS");
     headers.set("access-control-max-age", "600");
   }
   return headers;

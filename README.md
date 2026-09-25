@@ -105,10 +105,13 @@ Authorization: Bearer <ADMIN_API_TOKEN>
 |---|---|
 | `GET /api/admin/stats` | 项目、卡密和设备统计 |
 | `GET/POST /api/admin/projects` | 项目列表与创建 |
+| `DELETE /api/admin/projects/:id` | 永久删除项目及其套餐、卡密、设备和会话 |
 | `GET/POST /api/admin/plans` | 套餐列表与创建 |
 | `POST /api/admin/licenses/batch` | 批量生成卡密 |
 | `GET /api/admin/licenses` | 筛选与游标分页 |
 | `PATCH /api/admin/licenses/:id` | 启用或停用 |
+| `DELETE /api/admin/licenses/:id` | 永久删除单张卡密及其设备、会话和激活记录 |
+| `POST /api/admin/licenses/delete-batch` | 按 `ids` 数组批量删除卡密（每次最多 100 张） |
 | `POST /api/admin/licenses/:id/reset-devices` | 解绑全部设备 |
 | `GET /api/admin/audit` | 审计事件 |
 

@@ -164,6 +164,33 @@ const disabledValidation = await request("/api/public/validate", {
     signature: disabledSignature,
   },
 });
+const deleteBatchIssued = await request("/api/admin/licenses/batch", {
+  method: "POST",
+  admin: true,
+  body: { project_id: project.id, plan_id: daily.id, count: 2, max_devices: 1 },
+});
+if (deleteBatchIssued.status !== 201) throw new Error(`delete batch setup failed: ${JSON.stringify(deleteBatchIssued)}`);
+const singleDeleted = await request(`/api/admin/licenses/${encodeURIComponent(license.id)}`, { method: "DELETE", admin: true });
+const batchDeleteIds = [raceLicense.id, ...deleteBatchIssued.payload.items.map((item) => item.id)];
+const batchDeleted = await request("/api/admin/licenses/delete-batch", {
+  method: "POST",
+  admin: true,
+  body: { ids: batchDeleteIds },
+});
+const licensesAfterDelete = await request(`/api/admin/licenses?project_id=${encodeURIComponent(project.id)}`, { admin: true });
+const deletedLicensesAbsent = singleDeleted.status === 200
+  && singleDeleted.payload.deleted === 1
+  && batchDeleted.status === 200
+  && batchDeleted.payload.deleted === batchDeleteIds.length
+  && !licensesAfterDelete.payload.items.some((item) => item.id === license.id || batchDeleteIds.includes(item.id));
+const deleted = await request(`/api/admin/projects/${encodeURIComponent(project.id)}`, {
+  method: "DELETE",
+  admin: true,
+});
+const projectsAfterDelete = await request("/api/admin/projects", { admin: true });
+const deletedProjectAbsent = deleted.status === 200
+  && deleted.payload.id === project.id
+  && !projectsAfterDelete.payload.items.some((item) => item.id === project.id);
 
 const result = {
   ...(badLoginBlocked === null ? {} : { bad_login_blocked: badLoginBlocked }),
@@ -177,6 +204,11 @@ const result = {
   second_device_blocked: activationB.status,
   concurrent_activation_statuses,
   disabled_project_blocked: disabledValidation.status,
+  single_license_deleted: singleDeleted.status,
+  batch_licenses_deleted: batchDeleted.status,
+  deleted_licenses_absent: deletedLicensesAbsent,
+  project_deleted: deleted.status,
+  deleted_project_absent: deletedProjectAbsent,
 };
 console.log(JSON.stringify(result));
 
@@ -192,5 +224,10 @@ const expected = {
   second_device_blocked: 400,
   concurrent_activation_statuses: [200, 400],
   disabled_project_blocked: 400,
+  single_license_deleted: 200,
+  batch_licenses_deleted: 200,
+  deleted_licenses_absent: true,
+  project_deleted: 200,
+  deleted_project_absent: true,
 };
 if (JSON.stringify(result) !== JSON.stringify(expected)) process.exitCode = 1;

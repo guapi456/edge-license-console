@@ -114,9 +114,15 @@ tbody tr:hover { background: #fbfcfb; }
 .mono { font-family: Consolas, "SFMono-Regular", monospace; font-size: 11px; }
 .truncate { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .key-cell { display: flex; align-items: center; gap: 8px; min-width: 315px; }
+.uuid-cell { display: flex; align-items: center; gap: 8px; min-width: 340px; }
+.uuid-cell code { white-space: nowrap; }
 .license-key { display: block; color: var(--text); font-family: Consolas, "SFMono-Regular", monospace; font-size: 11px; white-space: nowrap; }
 .key-unavailable { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 155px; }
+.project-actions { min-width: 70px; }
+.license-actions { min-width: 220px; }
+.select-cell { width: 42px; min-width: 42px; max-width: 42px; padding-inline: 12px; text-align: center; }
+.select-cell input { width: 16px; min-height: 16px; margin: 0; vertical-align: middle; }
 .status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 999px; font-size: 11px; font-weight: 750; white-space: nowrap; }
 .status::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
 .status.active, .status.enabled, .status.valid { background: var(--green-soft); color: var(--green-dark); }

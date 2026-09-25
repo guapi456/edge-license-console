@@ -15,6 +15,7 @@
     licenseTotal: 0,
     licenseNextCursor: null,
     licenseCursors: [null],
+    selectedLicenseIds: new Set(),
     generatedKeys: [],
     confirmAction: null,
     loaded: new Set(),
@@ -192,8 +193,8 @@
   }
 
   function renderProjects() {
-    const rows = state.projects.map((project) => `<tr><td><strong>${escapeHtml(project.name)}</strong><span class="muted truncate">${escapeHtml(project.description || project.slug || "-")}</span></td><td class="mono">${escapeHtml(project.slug || project.id)}</td><td><span class="status ${escapeHtml(project.status || (project.enabled === false ? "disabled" : "active"))}">${statusLabel(project.status || (project.enabled === false ? "disabled" : "active"))}</span></td><td>${formatDate(project.created_at)}</td></tr>`).join("");
-    $("#projects-table").innerHTML = rows ? `<div class="table-wrap"><table><thead><tr><th>项目</th><th>标识</th><th>状态</th><th>创建时间</th></tr></thead><tbody>${rows}</tbody></table></div>` : stateView("empty", "还没有项目", "新建项目后可配置套餐并生成授权码。");
+    const rows = state.projects.map((project) => `<tr><td><strong>${escapeHtml(project.name)}</strong><span class="muted truncate">${escapeHtml(project.description || project.slug || "-")}</span></td><td><div class="uuid-cell"><code class="mono">${escapeHtml(project.id)}</code><button class="button quiet small" data-action="copy-project-id" data-id="${escapeHtml(project.id)}" type="button">复制 UUID</button></div></td><td class="mono">${escapeHtml(project.slug || "-")}</td><td><span class="status ${escapeHtml(project.status || (project.enabled === false ? "disabled" : "active"))}">${statusLabel(project.status || (project.enabled === false ? "disabled" : "active"))}</span></td><td>${formatDate(project.created_at)}</td><td><div class="actions project-actions"><button class="button danger small" data-action="delete-project" data-id="${escapeHtml(project.id)}" type="button">删除</button></div></td></tr>`).join("");
+    $("#projects-table").innerHTML = rows ? `<div class="table-wrap"><table><thead><tr><th>项目</th><th>项目 UUID</th><th>Slug</th><th>状态</th><th>创建时间</th><th class="actions">操作</th></tr></thead><tbody>${rows}</tbody></table></div>` : stateView("empty", "还没有项目", "新建项目后可配置套餐并生成授权码。");
     const recent = state.projects.slice(0, 5).map((project) => `<tr><td><strong>${escapeHtml(project.name)}</strong></td><td><span class="status ${escapeHtml(project.status || "active")}">${statusLabel(project.status || "active")}</span></td><td class="mono">${escapeHtml(project.slug || project.id)}</td></tr>`).join("");
     $("#overview-projects").innerHTML = recent ? `<div class="table-wrap"><table><thead><tr><th>项目</th><th>状态</th><th>标识</th></tr></thead><tbody>${recent}</tbody></table></div>` : stateView("empty", "还没有项目");
   }
@@ -227,6 +228,7 @@
     try {
       const data = await api(`/api/admin/licenses?${params}`);
       state.licenses = itemList(data, ["licenses", "items", "data"]);
+      state.selectedLicenseIds.clear();
       state.licenseTotal = Number(data?.total ?? data?.pagination?.total ?? state.licenses.length);
       state.licenseNextCursor = data?.next_cursor || data?.pagination?.next_cursor || null;
       renderLicenses();
@@ -244,9 +246,9 @@
       const copyControl = license.key
         ? `<button class="button quiet small" data-action="copy-key" data-id="${escapeHtml(license.id)}" type="button">复制</button>`
         : '<span class="key-unavailable">历史卡密仅显示尾号</span>';
-      return `<tr><td><div class="key-cell"><code class="license-key">${escapeHtml(displayKey)}</code>${copyControl}</div></td><td>${escapeHtml(projectName(license.project_id))}</td><td>${escapeHtml(license.plan_name || planName(license.plan_id))}</td><td><span class="status ${escapeHtml(status)}">${statusLabel(status)}</span></td><td>${formatNumber(devices)} / ${formatNumber(license.max_devices ?? 1)}</td><td>${formatDate(license.expires_at)}</td><td><div class="actions"><button class="button quiet small" data-action="reset" data-id="${escapeHtml(license.id)}">解绑设备</button><button class="button ${status === "disabled" ? "secondary" : "danger"} small" data-action="toggle" data-id="${escapeHtml(license.id)}" data-disabled="${status === "disabled"}">${status === "disabled" ? "启用" : "停用"}</button></div></td></tr>`;
+      return `<tr><td class="select-cell"><input class="row-check" type="checkbox" data-license-select="${escapeHtml(license.id)}" aria-label="选择授权码 ${escapeHtml(displayKey)}"></td><td><div class="key-cell"><code class="license-key">${escapeHtml(displayKey)}</code>${copyControl}</div></td><td>${escapeHtml(projectName(license.project_id))}</td><td>${escapeHtml(license.plan_name || planName(license.plan_id))}</td><td><span class="status ${escapeHtml(status)}">${statusLabel(status)}</span></td><td>${formatNumber(devices)} / ${formatNumber(license.max_devices ?? 1)}</td><td>${formatDate(license.expires_at)}</td><td><div class="actions license-actions"><button class="button quiet small" data-action="reset" data-id="${escapeHtml(license.id)}">解绑设备</button><button class="button ${status === "disabled" ? "secondary" : "danger"} small" data-action="toggle" data-id="${escapeHtml(license.id)}" data-disabled="${status === "disabled"}">${status === "disabled" ? "启用" : "停用"}</button><button class="button danger small" data-action="delete-license" data-id="${escapeHtml(license.id)}">删除</button></div></td></tr>`;
     }).join("");
-    $("#licenses-table").innerHTML = rows ? `<div class="table-wrap"><table><thead><tr><th>授权码</th><th>项目</th><th>套餐</th><th>状态</th><th>设备</th><th>到期时间</th><th class="actions">操作</th></tr></thead><tbody>${rows}</tbody></table></div>` : stateView("empty", "没有匹配的授权码", "调整筛选条件或批量生成新授权码。");
+    $("#licenses-table").innerHTML = rows ? `<div class="table-wrap"><table><thead><tr><th class="select-cell"><input id="select-page-licenses" type="checkbox" aria-label="选择本页全部授权码"></th><th>授权码</th><th>项目</th><th>套餐</th><th>状态</th><th>设备</th><th>到期时间</th><th class="actions">操作</th></tr></thead><tbody>${rows}</tbody></table></div>` : stateView("empty", "没有匹配的授权码", "调整筛选条件或批量生成新授权码。");
     const hasTotal = state.licenseTotal > state.licenses.length || (state.page === 1 && !state.licenseNextCursor);
     const pages = hasTotal ? Math.max(1, Math.ceil(state.licenseTotal / state.pageSize)) : null;
     $("#pagination-summary").textContent = hasTotal ? `共 ${formatNumber(state.licenseTotal)} 条` : `本页 ${formatNumber(state.licenses.length)} 条`;
@@ -255,6 +257,19 @@
     $("#next-page").disabled = state.licenseNextCursor ? false : pages ? state.page >= pages : true;
     $("#license-pagination").hidden = state.licenses.length === 0;
     $("#copy-visible-keys").disabled = !state.licenses.some((license) => license.key);
+    syncLicenseSelection();
+  }
+
+  function syncLicenseSelection() {
+    const selectedCount = state.selectedLicenseIds.size;
+    const button = $("#delete-selected-licenses");
+    button.disabled = selectedCount === 0;
+    button.textContent = selectedCount ? `批量删除 (${selectedCount})` : "批量删除";
+    const selectPage = $("#select-page-licenses");
+    if (selectPage) {
+      selectPage.checked = state.licenses.length > 0 && selectedCount === state.licenses.length;
+      selectPage.indeterminate = selectedCount > 0 && selectedCount < state.licenses.length;
+    }
   }
 
   async function loadAudit() {
@@ -431,6 +446,29 @@
       } catch (error) { toast(error.message, "error"); } finally { setBusy(form, false); }
     });
 
+    $("#projects-table").addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const id = button.dataset.id;
+      const project = state.projects.find((item) => String(item.id) === id);
+      if (!project) return;
+      if (button.dataset.action === "copy-project-id") {
+        await copyText(project.id, "项目 UUID 已复制");
+        return;
+      }
+      if (button.dataset.action === "delete-project") {
+        showConfirm({
+          title: `删除项目“${project.name}”`,
+          message: `将永久删除该项目、${formatNumber(project.plan_count || 0)} 个套餐、${formatNumber(project.license_count || 0)} 张卡密及全部设备和会话。项目 UUID：${project.id}`,
+          label: "永久删除",
+          action: async () => {
+            await api(`/api/admin/projects/${encodeURIComponent(id)}`, { method: "DELETE" });
+            return { refresh: "projects" };
+          },
+        });
+      }
+    });
+
     $("#plan-kind").addEventListener("change", (event) => {
       const days = { daily: 1, weekly: 7, monthly: 30, quarterly: 90, annual: 365 }[event.target.value];
       if (days) $("#duration-days").value = days;
@@ -484,6 +522,31 @@
       const keys = state.licenses.map((license) => license.key).filter(Boolean);
       if (keys.length) await copyText(keys.join("\n"), `已复制本页 ${keys.length} 个授权码`);
     });
+    $("#delete-selected-licenses").addEventListener("click", () => {
+      const ids = [...state.selectedLicenseIds];
+      if (!ids.length) return;
+      showConfirm({
+        title: `批量删除 ${ids.length} 张授权码`,
+        message: "将永久删除选中授权码及其设备绑定、会话和激活记录。此操作不可撤销。",
+        label: "永久删除",
+        action: async () => {
+          await api("/api/admin/licenses/delete-batch", { method: "POST", body: JSON.stringify({ ids }) });
+          state.selectedLicenseIds.clear();
+          return { refresh: "licenses", message: `已删除 ${ids.length} 张授权码` };
+        },
+      });
+    });
+    $("#licenses-table").addEventListener("change", (event) => {
+      const checkbox = event.target;
+      if (checkbox.id === "select-page-licenses") {
+        state.selectedLicenseIds.clear();
+        if (checkbox.checked) state.licenses.forEach((license) => state.selectedLicenseIds.add(String(license.id)));
+      } else if (checkbox.matches("[data-license-select]")) {
+        if (checkbox.checked) state.selectedLicenseIds.add(checkbox.dataset.licenseSelect);
+        else state.selectedLicenseIds.delete(checkbox.dataset.licenseSelect);
+      } else return;
+      syncLicenseSelection();
+    });
     $("#licenses-table").addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
@@ -494,6 +557,19 @@
         return;
       }
       if (button.dataset.action === "reset") showConfirm({ title: "解绑全部设备", message: "该授权码下次使用时需要重新绑定设备。此操作会写入审计日志。", label: "确认解绑", action: () => api(`/api/admin/licenses/${encodeURIComponent(id)}/reset-devices`, { method: "POST" }) });
+      if (button.dataset.action === "delete-license") {
+        const license = state.licenses.find((item) => String(item.id) === id);
+        showConfirm({
+          title: "删除授权码",
+          message: `将永久删除授权码 ${license?.key || license?.display_hint || id} 及其设备绑定、会话和激活记录。`,
+          label: "永久删除",
+          action: async () => {
+            await api(`/api/admin/licenses/${encodeURIComponent(id)}`, { method: "DELETE" });
+            state.selectedLicenseIds.delete(id);
+            return { refresh: "licenses", message: "授权码已删除" };
+          },
+        });
+      }
       if (button.dataset.action === "toggle") {
         const disabled = button.dataset.disabled === "true";
         const nextStatus = disabled ? "enabled" : "disabled";
@@ -520,8 +596,17 @@
       if (!state.confirmAction) return;
       setBusy(form, true, "处理中...");
       try {
-        await state.confirmAction();
-        $("#confirm-modal").close(); state.confirmAction = null; state.loaded.delete("overview"); await loadLicenses(); toast("操作已完成");
+        const result = await state.confirmAction();
+        $("#confirm-modal").close(); state.confirmAction = null;
+        if (result?.refresh === "projects") {
+          state.loaded.clear();
+          await loadProjects();
+          toast("项目已删除");
+        } else {
+          state.loaded.delete("overview");
+          await loadLicenses();
+          toast(result?.message || "操作已完成");
+        }
       } catch (error) { toast(error.message, "error"); } finally { setBusy(form, false); }
     });
 
